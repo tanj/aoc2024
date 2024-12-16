@@ -20,15 +20,20 @@ pub fn main() !void {
     var in_stream = buf_reader.reader();
     var buf: [1024]u8 = undefined;
     var safe: u64 = 0;
+    var damp: u64 = 0;
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
         if (line.len > 0) {
             const report = try parse_line(arena.allocator(), line);
             if (status(report) == .Safe) {
                 safe += 1;
             }
+            if (try status_dampen(arena.allocator(), report) == .Safe) {
+                damp += 1;
+            }
         }
     }
     try stdout.print("Safe Reports: {d}\n", .{safe});
+    try stdout.print("Damp Reports: {d}\n", .{damp});
     try bw.flush();
 }
 
@@ -57,6 +62,25 @@ fn status(report: []i64) Status {
     return .Safe;
 }
 
+fn status_dampen(allocator: std.mem.Allocator, report: []i64) !Status {
+    var s = status(report);
+    if (s == .Safe) {
+        return s;
+    }
+    for (0..report.len) |i| {
+        var levels = std.ArrayList(i64).init(allocator);
+        try levels.appendSlice(report);
+        _ = levels.orderedRemove(i);
+        const sl = try levels.toOwnedSlice();
+        s = status(sl);
+        allocator.free(sl);
+        if (s == .Safe) {
+            return s;
+        }
+    }
+    return .Unsafe;
+}
+
 const Status = enum { Safe, Unsafe };
 
 test "day2" {
@@ -77,6 +101,29 @@ test "day2" {
         const parsed_line = try parse_line(alloc, td.line);
         const status_res = status(parsed_line);
         std.debug.print("{} : {any} : {}\n", .{ td, parsed_line, status_res });
+        alloc.free(parsed_line);
+        try std.testing.expectEqual(td.status, status_res);
+    }
+}
+
+test "day2part2" {
+    const alloc = std.testing.allocator;
+    const TestData = struct {
+        line: []const u8,
+        status: Status,
+    };
+    const data: [6]TestData = .{
+        TestData{ .line = "7 6 4 2 1", .status = .Safe },
+        TestData{ .line = "1 2 7 8 9", .status = .Unsafe },
+        TestData{ .line = "9 7 6 2 1", .status = .Unsafe },
+        TestData{ .line = "1 3 2 4 5", .status = .Safe },
+        TestData{ .line = "8 6 4 4 1", .status = .Safe },
+        TestData{ .line = "1 3 6 7 9", .status = .Safe },
+    };
+    for (data) |td| {
+        const parsed_line = try parse_line(alloc, td.line);
+        const status_res = status_dampen(alloc, parsed_line);
+        std.debug.print("{} : {any} : {any}\n", .{ td, parsed_line, status_res });
         alloc.free(parsed_line);
         try std.testing.expectEqual(td.status, status_res);
     }
