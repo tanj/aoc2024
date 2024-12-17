@@ -36,6 +36,28 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const mecha = b.dependency("mecha", .{});
+
+    exe.root_module.addImport("mecha", mecha.module("mecha"));
+
+    const days = .{
+        "day1",
+        "day2",
+        "day3",
+    };
+    inline for (days) |day| {
+        const e = b.addExecutable(.{
+            .name = day,
+            .root_source_file = b.path("src/" ++ day ++ ".zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        if (std.mem.eql(u8, day, "day3")) {
+            e.root_module.addImport("mecha", mecha.module("mecha"));
+        }
+        b.installArtifact(e);
+    }
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
@@ -88,4 +110,16 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
+    inline for (days) |day| {
+        const t = b.addTest(.{
+            .root_source_file = b.path("src/" ++ day ++ ".zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        if (std.mem.eql(u8, day, "day3")) {
+            t.root_module.addImport("mecha", mecha.module("mecha"));
+        }
+        const rt = b.addRunArtifact(t);
+        test_step.dependOn(&rt.step);
+    }
 }
