@@ -24,8 +24,9 @@
     // internet connectivity.
     .dependencies = .{
         .mecha = .{
-            .url = "https://github.com/Hejsil/mecha/archive/refs/tags/0.9.0.tar.gz",
-            .hash = "12206311fbaae8a0adc35e4835ddd9bcc1ff8fff756c9df40e19133f007fa05d3948",
+            // .url = "git+https://github.com/Hejsil/mecha.git#075ecd11c0e2d54efd001c2cc2821aede265f69b",
+            // .hash = "1220fd8e9806e1b50a4c56c81b313f4fb28c462971b8d2bb8b2c63997b559edbf792",
+            .path = "../mecha/",
         },
     },
     .paths = .{

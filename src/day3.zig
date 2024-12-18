@@ -9,6 +9,15 @@ const MullOp = struct {
     lhs: i64,
     rhs: i64,
 };
+const Enable = enum { do, @"don't" };
+const EnableOp = struct {
+    op: Enable,
+};
+const OpTypeTag = enum { operation, enable };
+const OpType = union(OpTypeTag) {
+    operation: MullOp,
+    enable: EnableOp,
+};
 
 const num = mecha.int(i16, .{
     .parse_sign = false,
@@ -27,14 +36,36 @@ const mullop = mecha.combine(.{
     num,
     rparen.discard(),
 });
-const make_mullop = mullop.map(mecha.toStruct(MullOp));
-const find_mull = mecha.combine(.{
-    mecha.many(mecha.utf8.not(mullop), .{}).discard(),
+const make_mullop: mecha.Parser(OpType) = mullop.map(mecha.toStruct(MullOp)).map(mecha.unionInit(
+    OpType,
+    OpTypeTag.operation,
+));
+const enable_operation = mecha.enumeration(Enable);
+const enop = mecha.combine(.{
+    enable_operation,
+    lparen.discard(),
+    rparen.discard(),
+});
+const make_enop: mecha.Parser(OpType) = enop.map(mecha.toStruct(EnableOp)).map(mecha.unionInit(
+    OpType,
+    OpTypeTag.enable,
+));
+const op_oneof = mecha.oneOf(.{
+    enop.discard(),
+    mullop.discard(),
+});
+const make_oponeof: mecha.Parser(OpType) = mecha.oneOf(.{
+    make_enop,
     make_mullop,
+});
+const find_mull = mecha.combine(.{
+    mecha.many(mecha.utf8.not(op_oneof), .{}).discard(),
+    make_oponeof,
     // mecha.many(mecha.utf8.not(mullop), .{ .max = 5 }).discard(),
     // mecha.opt(mecha.utf8.not(mullop)).discard(),
 });
-const sep = mecha.opt(mecha.many(mecha.utf8.not(mullop), .{})).discard();
+
+const sep = mecha.opt(mecha.many(mecha.utf8.not(op_oneof), .{})).discard();
 const parse_line = mecha.many(find_mull, .{ .separator = sep });
 
 pub fn main() !void {
@@ -56,29 +87,54 @@ pub fn main() !void {
     var in_stream = buf_reader.reader();
     var buf: [4096]u8 = undefined;
     var result: i128 = 0;
+    var sup_result: i128 = 0;
+    var apply = Enable.do;
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
         if (line.len > 0) {
             const res = try parse_line.parse(arena.allocator(), line);
-            for (res.value) |mull| {
-                result += mull.lhs * mull.rhs;
+            switch (res.value) {
+                .ok => |val| {
+                    for (val) |v| {
+                        switch (v) {
+                            .operation => |o| {
+                                result += o.lhs * o.rhs;
+                                if (apply == Enable.do) {
+                                    sup_result += o.lhs * o.rhs;
+                                }
+                            },
+                            .enable => |e| {
+                                apply = e.op;
+                            },
+                        }
+                    }
+                },
+                .err => |e| std.debug.print("parser error: {any}\n", .{e}),
             }
-            std.debug.print("{}\n", .{res});
+            // std.debug.print("{}\n", .{res});
         }
     }
     try stdout.print("Result: {d}\n", .{result});
+    try stdout.print("Suppressed Result: {d}\n", .{sup_result});
     try bw.flush();
 }
 
 test "parser" {
     const alloc = std.testing.allocator;
-    const a = (try make_mullop.parse(alloc, "mul(1,2)")).value;
-    try std.testing.expectEqual(Operation.mul, a.op);
-    try std.testing.expectEqual(1, a.lhs);
-    try std.testing.expectEqual(2, a.rhs);
+    const a = (try make_mullop.parse(alloc, "mul(1,2)")).value.ok;
+    try std.testing.expect(@as(OpTypeTag, a) == OpTypeTag.operation);
+    switch (a) {
+        OpTypeTag.operation => |v| {
+            try std.testing.expectEqual(Operation.mul, v.op);
+            try std.testing.expectEqual(1, v.lhs);
+            try std.testing.expectEqual(2, v.rhs);
+        },
+        OpTypeTag.enable => unreachable,
+    }
 }
 test "parser fail" {
     const alloc = std.testing.allocator;
-    try mecha.expectResult(MullOp, mecha.Error.ParserFailed, make_mullop.parse(alloc, "amul(1,2)"));
+    // try mecha.expectResult(MullOp, mecha.Error.ParserFailed, make_mullop.parse(alloc, "amul(1,2)"));
+    try mecha.expectErr(OpType, 0, try make_mullop.parse(alloc, "amul(1,2)"));
 }
 // test "parser find" {
 //     const alloc = std.testing.allocator;
@@ -88,7 +144,8 @@ test "parser fail" {
 // }
 test "parser find all" {
     const alloc = std.testing.allocator;
-    const a = try parse_line.parse(alloc, "amul(1,2)#$&mul()mul(3,4)mul(123,456]mul(567,890)");
-    // try std.testing.expect(a.value.len > 0);
+    const a = (try parse_line.parse(alloc, "amul(1,2)#do()$&mul()mul(3,4)don't()mul(123,456]do()mul(567,890)")).value.ok;
+    try std.testing.expect(a.len > 0);
     std.debug.print("{any}\n", .{a});
+    alloc.free(a);
 }
