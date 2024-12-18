@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) void {
         "day1",
         "day2",
         "day3",
+        "day4",
     };
     inline for (days) |day| {
         const e = b.addExecutable(.{
