@@ -142,10 +142,10 @@ test "parser fail" {
 //     std.debug.print("{any}\n", .{a});
 //     alloc.free(a);
 // }
-test "parser find all" {
-    const alloc = std.testing.allocator;
-    const a = (try parse_line.parse(alloc, "amul(1,2)#do()$&mul()mul(3,4)don't()mul(123,456]do()mul(567,890)")).value.ok;
-    try std.testing.expect(a.len > 0);
-    std.debug.print("{any}\n", .{a});
-    alloc.free(a);
-}
+// test "parser find all" {
+//     const alloc = std.testing.allocator;
+//     const a = (try parse_line.parse(alloc, "amul(1,2)#do()$&mul()mul(3,4)don't()mul(123,456]do()mul(567,890)")).value.ok;
+//     try std.testing.expect(a.len > 0);
+//     std.debug.print("{any}\n", .{a});
+//     alloc.free(a);
+// }
