@@ -2,7 +2,13 @@ const std = @import("std");
 
 const parseInt = std.fmt.parseInt;
 const max_grid = 141;
-fn word_search(haystack: []const u8) u64 {
+
+const SearchResult = struct {
+    std: u64,
+    x: u64,
+};
+
+fn word_search(haystack: []const u8) SearchResult {
     var grid: [max_grid][max_grid]u8 = undefined;
     var h: u8 = 0;
     var v: u8 = 0;
@@ -24,33 +30,36 @@ fn word_search(haystack: []const u8) u64 {
     const rev = [_]u8{ 'S', 'A', 'M', 'X' };
     h = 0;
     v = 0;
-    var count: u64 = 0;
+    var result = SearchResult{ .std = 0, .x = 0 };
     while (v < act_grid) : (v += 1) {
         h = 0;
         while (h < act_grid) : (h += 1) {
             std.debug.print("v: {d} h:{d}\n", .{ v, h });
             if (h < act_grid - 3) {
-                count += check_horz(&grid, fwd, h, v);
-                count += check_horz(&grid, rev, h, v);
+                result.std += check_horz(&grid, fwd, h, v);
+                result.std += check_horz(&grid, rev, h, v);
                 if (v < act_grid - 3) {
-                    count += check_diag_lr(&grid, fwd, h, v);
-                    count += check_diag_lr(&grid, rev, h, v);
+                    result.std += check_diag_lr(&grid, fwd, h, v);
+                    result.std += check_diag_lr(&grid, rev, h, v);
                 }
             }
             if (h > 2) {
                 if (v < act_grid - 3) {
-                    count += check_diag_rl(&grid, fwd, h, v);
-                    count += check_diag_rl(&grid, rev, h, v);
+                    result.std += check_diag_rl(&grid, fwd, h, v);
+                    result.std += check_diag_rl(&grid, rev, h, v);
                 }
             }
             if (v < act_grid - 3) {
-                count += check_vert(&grid, fwd, h, v);
-                count += check_vert(&grid, rev, h, v);
+                result.std += check_vert(&grid, fwd, h, v);
+                result.std += check_vert(&grid, rev, h, v);
+            }
+            if ((h < act_grid - 1 and h > 0) and (v > 0 and v < act_grid - 1)) {
+                result.x += check_cross(&grid, h, v);
             }
         }
     }
 
-    return count;
+    return result;
 }
 fn check_horz(grid: *[max_grid][max_grid]u8, word: [4]u8, h: u8, v: u8) u8 {
     var i: u8 = 0;
@@ -99,6 +108,19 @@ fn check_diag_rl(grid: *[max_grid][max_grid]u8, word: [4]u8, h: u8, v: u8) u8 {
     std.debug.print("not found\n", .{});
     return 0;
 }
+fn check_cross(grid: *[max_grid][max_grid]u8, h: u8, v: u8) u8 {
+    if ((grid[v][h] == 'A') and
+        (((grid[v - 1][h - 1] == 'M' and grid[v + 1][h + 1] == 'S') or
+        (grid[v - 1][h - 1] == 'S' and grid[v + 1][h + 1] == 'M')) and
+        ((grid[v + 1][h - 1] == 'M' and grid[v - 1][h + 1] == 'S') or
+        (grid[v + 1][h - 1] == 'S' and grid[v - 1][h + 1] == 'M'))))
+    {
+        std.debug.print("found\n", .{});
+        return 1;
+    }
+    std.debug.print("not found\n", .{});
+    return 0;
+}
 test "parse example" {
     const sample =
         \\MMMSXXMASM
@@ -112,7 +134,9 @@ test "parse example" {
         \\MAMMMXMMMM
         \\MXMXAXMASX
     ;
-    try std.testing.expectEqual(18, word_search(sample));
+    const result = word_search(sample);
+    try std.testing.expectEqual(18, result.std);
+    try std.testing.expectEqual(9, result.x);
 }
 
 pub fn main() !void {
@@ -137,6 +161,7 @@ pub fn main() !void {
     std.debug.print("read {d}\n", .{read});
 
     const result = word_search(buf[0..read]);
-    try stdout.print("Result: {d}\n", .{result});
+    try stdout.print("Result: {d}\n", .{result.std});
+    try stdout.print("Result X-MAS: {d}\n", .{result.x});
     try bw.flush();
 }
