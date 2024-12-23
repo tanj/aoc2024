@@ -23,7 +23,8 @@ pub fn main() !void {
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
         try print_queue.parse_line(line);
     }
-    try stdout.print("Part 1: {d}\n", .{print_queue.process_day1_part1()});
+    try stdout.print("Part 1: {d}\n", .{print_queue.process_part1()});
+    try stdout.print("Part 2: {d}\n", .{print_queue.process_part2()});
     try bw.flush();
 }
 
@@ -123,7 +124,7 @@ const PrintQueue = struct {
         return true;
     }
 
-    fn process_day1_part1(self: *PrintQueue) u64 {
+    fn process_part1(self: *PrintQueue) u64 {
         var middle_sum: u64 = 0;
         for (self.pages_to_update.items) |job| {
             if (self.validate_pages(job)) {
@@ -131,6 +132,36 @@ const PrintQueue = struct {
             }
         }
         return middle_sum;
+    }
+
+    fn process_part2(self: *PrintQueue) u64 {
+        var middle_sum: u64 = 0;
+        for (self.pages_to_update.items) |job| {
+            if (!self.validate_pages(job)) {
+                var B = std.ArrayList(u8).init(self.allocator);
+                B.appendNTimes(0, job.len) catch @panic("unable to alloc");
+                std.mem.sort(u8, job, &self, struct {
+                    fn inner(pq: *const *PrintQueue, a: u8, b: u8) bool {
+                        return (pq.*).rule_sort(a, b);
+                    }
+                }.inner);
+                middle_sum += mid(job);
+                B.deinit();
+            }
+        }
+        return middle_sum;
+    }
+
+    /// A lessThan function to use with sort applying the rules
+    fn rule_sort(self: *PrintQueue, lhs: u8, rhs: u8) bool {
+        const before = self.collected_rules.getKey(lhs) orelse return false;
+        const is_less_than = self.collected_rules.get(before).?;
+        for (is_less_than.items) |after| {
+            if (rhs == after) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 
@@ -195,7 +226,8 @@ test "parse_line" {
     try std.testing.expect(!print_queue.validate_pages(print_queue.pages_to_update.items[3]));
     try std.testing.expect(!print_queue.validate_pages(print_queue.pages_to_update.items[4]));
     try std.testing.expect(!print_queue.validate_pages(print_queue.pages_to_update.items[5]));
-    try std.testing.expectEqual(143, print_queue.process_day1_part1());
+    try std.testing.expectEqual(143, print_queue.process_part1());
+    try std.testing.expectEqual(123, print_queue.process_part2());
     var it = print_queue.collected_rules.iterator();
     while (it.next()) |entry| {
         std.debug.print("{any}: {any}\n", .{ entry.key_ptr.*, entry.value_ptr.items });
