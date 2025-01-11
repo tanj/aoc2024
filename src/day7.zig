@@ -1,24 +1,47 @@
 const std = @import("std");
 const parseInt = std.fmt.parseInt;
 
-fn total_calibration_result(input: []const u8) usize {
+fn total_calibration_result(allocator: std.mem.Allocator, input: []const u8) !usize {
     var it_line = std.mem.splitScalar(u8, input, '\n');
     var calibration: usize = 0;
     while (it_line.next()) |line| {
-        calibration += calc_line(line);
+        calibration += try calc_line(allocator, line);
     }
     return calibration;
 }
 
-fn calc_line(input: []const u8) usize {
+fn calc_line(allocator: std.mem.Allocator, input: []const u8) !usize {
     var it_line = std.mem.tokenizeAny(u8, input, ": ");
     const first = it_line.next() orelse "0";
     const expected = parseInt(usize, first, 10) catch @panic("unable to parseInt");
     var i: usize = 0;
-    var operands: [20]usize = .{0} ** 20;
+    var prev = try std.ArrayList(usize).initCapacity(allocator, 2 ^ 8);
+    defer prev.deinit();
+    var cur = try std.ArrayList(usize).initCapacity(allocator, 2 ^ 8);
+    defer cur.deinit();
     while (it_line.next()) |operand| : (i += 1) {
-        operands[i] = parseInt(usize, operand, 10) catch @panic("unable to parseInt");
+        try cur.resize(0);
+        const item = try parseInt(usize, operand, 10);
+        if (prev.items.len == 0) {
+            try prev.append(item);
+        } else {
+            for (prev.items) |x| {
+                if (x <= expected) {
+                    try cur.append(x + item);
+                    try cur.append(x * item);
+                }
+            }
+            try prev.resize(0);
+            try prev.appendSlice(cur.items);
+        }
     }
+    for (cur.items) |x| {
+        if (x == expected) {
+            return expected;
+        }
+    }
+    // std.debug.print("{s}\n", .{input});
+    return 0;
 }
 
 test "day 7 part 1" {
@@ -34,7 +57,7 @@ test "day 7 part 1" {
         \\292: 11 6 16 20
     ;
     // std.debug.print("{s}\n", .{input});
-    try std.testing.expectEqual(3749, total_calibration_result(input));
+    try std.testing.expectEqual(3749, try total_calibration_result(std.testing.allocator, input));
 }
 
 pub fn main() !void {
@@ -54,11 +77,11 @@ pub fn main() !void {
     const in_reader = input.reader();
     var buf_reader = std.io.bufferedReader(in_reader);
     var in_stream = buf_reader.reader();
-    var buf: [20000]u8 = undefined;
+    var buf: [30000]u8 = undefined;
     const read = try in_stream.readAll(&buf);
     std.debug.print("read {d}\n", .{read});
 
-    const result = total_calibration_result(buf[0..read]);
+    const result = try total_calibration_result(arena.allocator(), buf[0..read]);
     try stdout.print("Result: {d}\n", .{result});
     try bw.flush();
 }
