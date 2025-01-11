@@ -29,6 +29,11 @@ fn calc_line(allocator: std.mem.Allocator, input: []const u8) !usize {
                 if (x <= expected) {
                     try cur.append(x + item);
                     try cur.append(x * item);
+                    var a = [_]u8{0} ** 40;
+                    const l = std.fmt.formatIntBuf(&a, x, 10, .lower, .{});
+                    const m = std.fmt.formatIntBuf(a[l..a.len], item, 10, .lower, .{});
+                    const a_int = try parseInt(usize, a[0 .. l + m], 10);
+                    try cur.append(a_int);
                 }
             }
             try prev.resize(0);
@@ -57,7 +62,7 @@ test "day 7 part 1" {
         \\292: 11 6 16 20
     ;
     // std.debug.print("{s}\n", .{input});
-    try std.testing.expectEqual(3749, try total_calibration_result(std.testing.allocator, input));
+    try std.testing.expectEqual(11387, try total_calibration_result(std.testing.allocator, input));
 }
 
 pub fn main() !void {
